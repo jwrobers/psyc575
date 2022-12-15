@@ -1,0 +1,265 @@
+# psyc575
+
+---
+title: "Homework 9"
+author: "Jacob Roberson and Sammy Martinez"
+date: "`r Sys.Date()`"
+output: html_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+## Sufficient background to understand your research:
+
+Across industries, bias exist in organizational hiring. This includes in academia, especially in STEM disciplines. One common practice of organizations, in this case universities, used to demonstrate a commitment to DEI is to conduct diversity and bias awareness trainings. But effective are these trainings with regard to impacting future hiring practices? We know that representational diversity increases organizational attractiveness for potential applicants, but does greater existing racial representation in a department predict the subsequent hiring of more racially diverse applicants in the future? 
+
+
+## Research questions clearly defined:
+
+Do bias interventions focused on one element of diversity (e.g., gender) have spillover effects leading to reduced bias (e.g., greater hiring) on other dimensions of diversity (e.g., race/ethnicity)?
+
+Does the number of Underrepresented Minority (URM; or female) faculty within a department impact the number of URM (or female) faculty the same department subsequently hires following a bias-reduction intervention?
+
+
+## A description of the nesting structure of your data:
+
+92 department clusters (level 3) formed 46 pairs where one unit of each pairing was randomly assigned to the control condition or to the intervention condition (level 2)
+
+The number of faculty within the conditions within the department pairs and clusters are our level 1 data
+
+##Our Data (what our model will show and what we analyzed)
+
+### LEVEL 2 = Intervention or Control (0 = Control, 1 = Intervention)
+### LEVEL 1 = Faculty (Number of New Hires)
+
+
+## Your plan of data analysis:
+Linear regression to identify if a larger existing proportion of URM faculty in a department leads to a larger number of new hire URM faculty
+
+
+## Description of each variable in your preliminary analysis
+
+Predictor Variable (IV): Number of current URM faculty in a department (pairing)
+
+Main outcome variable (DV): the proportion of Underrepresented Minority (URM) faculty hired post-manipulation (POST)
+
+
+## Model equations
+Level 1
+
+$$\text{Number of URM Hired}_{ij} = \beta_{0j} + \beta_{1j} \text{Percentage of URM Faculty}_{ij} + e_{ij}$$
+
+Level 2
+$$ \beta_{0j} = \gamma_{00} + \gamma_{01} \text{Percentage of URM Faculty}_j + \gamma_{02} \text{Condition}_j + u_{0j} $$
+
+$$ \beta_{1j} = \gamma_{10} + \gamma_{11} \text{Condition}_j + u_{1j}$$
+
+## Your code for running the multilevel analyses
+
+```{r load-pkg, message = FALSE}
+# To install a package, run the following ONCE (and only once on your computer)
+# install.packages("psych")
+library(here)  # makes reading data more consistent
+library(tidyverse)  # for data manipulation and plotting
+library(haven)  # for importing SPSS/SAS/Stata data
+library(lme4)  # for multilevel analysis
+library(brms)  # for Bayesian multilevel analysis
+library(lattice)  # for dotplot (working with lme4)
+library(r2mlm)  # for computing r-squared
+library(modelsummary)  # for making tables
+library(nlme)
+library(performance)
+library(broom)
+```
+
+```{r, message = FALSE}
+hiring <- read_csv(here("PROSPECTUS", "hiring.csv"))
+rmarkdown::paged_table(hiring)
+```
+
+```{r pairs, warning = FALSE, fig.asp = 1}
+hiring <- hiring %>% 
+  mutate(
+    # Compute number of female hires
+    num_hire_urm = NH_NumFacURMF + NH_NumFacURMM,
+    num_hire_wh = NH_NumFacWHF + NH_NumFacWhM,
+    num_URM_total = NumFacURMF + NumFacURMM, 
+    num_wh_total = NumFacWHF + NumFacWhM,
+    percentage_URM_total = (num_URM_total / NumFac)*100,
+    percentage_wh_total = (num_wh_total / NumFac)*100,
+    num_f_total = (NumFacURMF + NumFacWHF + NumFacAsianF),
+    num_m_total = (NumFacURMM + NumFacWhM + NumFacAsianM),
+    percentage_f_total = (num_f_total / NumFac) *100,
+    percentage_m_total = (num_m_total / NumFac) *100,
+    num_hire_f = NH_NumFacURMF + NH_NumFacWHF + NH_NumFacAsianF,
+    num_hire_m = NH_NumFacURMM + NH_NumFacWhM + NH_NumFacAsianM,
+  )
+hiring <- hiring[rowSums(is.na(hiring)) == 0, ] 
+```
+
+```{r filter, message = FALSE}
+    # Also recode EXPDEPT and POST to factors
+hiring <- hiring %>% 
+  mutate(
+    EXPDEPT = factor(EXPDEPT, levels = c(0, 1), 
+                     labels = c("control", "intervention")), 
+    POST = factor(POST, levels = c(0, 1), 
+                  labels = c("pre", "post")))
+```
+
+
+## A table summarizing model results
+
+```{r, message = FALSE}
+hiring_new <- hiring %>% 
+  filter(POST == "post")
+hiring_new %>%                               # Summary by group using dplyr
+  group_by(EXPDEPT) %>% 
+  summarize(min = min(percentage_URM_total),
+            q1 = quantile(percentage_URM_total, 0.25),
+            median = median(percentage_URM_total),
+            mean = mean(percentage_URM_total),
+            q3 = quantile(percentage_URM_total, 0.75),
+            max = max(percentage_URM_total),
+            sd = sd(percentage_URM_total))
+hiring_new %>%                               # Summary by group using dplyr
+  group_by(EXPDEPT) %>% 
+  summarize(min = min(num_hire_urm),
+            q1 = quantile(num_hire_urm, 0.25),
+            median = median(num_hire_urm),
+            mean = mean(num_hire_urm),
+            q3 = quantile(num_hire_urm, 0.75),
+            max = max(num_hire_urm),
+            sd = sd(num_hire_urm))
+hiring_new %>%                               # Summary by group using dplyr
+  group_by(EXPDEPT) %>% 
+  summarize(min = min(num_URM_total),
+            q1 = quantile(num_URM_total, 0.25),
+            median = median(num_URM_total),
+            mean = mean(num_URM_total),
+            q3 = quantile(num_URM_total, 0.75),
+            max = max(num_URM_total),
+            sd = sd(num_URM_total))
+```
+
+
+``` {r, message = FALSE} 
+m1_urm <- lmer(num_hire_urm ~ percentage_URM_total + (1 | PAIR_RAND), data = hiring_new)
+m1_urm_condition <- lmer(num_hire_urm ~ percentage_URM_total + EXPDEPT + (1 | PAIR_RAND), data = hiring_new)
+m1_condition <- lmer(num_hire_urm ~ EXPDEPT + (1 | PAIR_RAND), data = hiring_new)
+m1_wh <- lmer(num_hire_wh ~ percentage_wh_total + (1 | PAIR_RAND), data = hiring_new)
+summary(m1_urm)
+summary(m1_wh)
+summary(m1_urm_condition)
+summary(m1_condition)
+```
+
+## A figure showing the association between the main predictor and the outcome. Include random slopes if appropriate.
+
+```{r, message = FALSE} 
+hiring_graphs <- hiring_new %>%
+  filter(DEPT_RAND != 929)
+hiring_graphs %>%
+    filter(PAIR_RAND %in% sample(unique(PAIR_RAND), 46)) %>%
+    ggplot(aes(x = num_URM_total, y = num_hire_urm)) +
+    geom_point(size = 0.5) +
+    geom_smooth(method = "lm") +
+    facet_wrap(~EXPDEPT)
+hiring_graphs %>%
+    filter(PAIR_RAND %in% sample(unique(PAIR_RAND), 46)) %>%
+    ggplot(aes(x = num_wh_total, y = num_hire_wh)) +
+    geom_point(size = 0.5) +
+    geom_smooth(method = "lm") +
+    facet_wrap(~EXPDEPT)
+hiring_graphs %>%
+    filter(PAIR_RAND %in% sample(unique(PAIR_RAND), 46)) %>%
+    ggplot(aes(x = percentage_URM_total, y = num_hire_urm)) +
+    geom_point(size = 0.5) +
+    geom_smooth(method = "lm")+
+    facet_wrap(~EXPDEPT)
+hiring_graphs %>%
+    filter(PAIR_RAND %in% sample(unique(PAIR_RAND), 46)) %>%
+    ggplot(aes(x = percentage_wh_total, y = num_hire_wh)) +
+    geom_point(size = 0.5) +
+    geom_smooth(method = "lm") +
+    facet_wrap(~EXPDEPT)
+ggplot(hiring_graphs, aes(x= percentage_URM_total, y= num_hire_urm)) +
+  geom_point() +
+   geom_smooth(method = "lm", se = FALSE)+
+  labs(x='Percentage of URM Faculty', y='Number Of URM Hires', title='Relationship between Percentage of URM Faculty and Amount of URM Hires')+
+    facet_wrap(~EXPDEPT)
+```
+
+```{r, message = FALSE}
+hiring_graphs %>%
+    filter(PAIR_RAND %in% sample(unique(PAIR_RAND), 46)) %>%
+    ggplot(aes(x = percentage_f_total, y = num_hire_f)) +
+    geom_point(size = 0.5) +
+    geom_smooth(method = "lm")+
+    facet_wrap(~EXPDEPT)
+hiring_graphs %>%
+    filter(PAIR_RAND %in% sample(unique(PAIR_RAND), 46)) %>%
+    ggplot(aes(x = percentage_m_total, y = num_hire_m)) +
+    geom_point(size = 0.5) +
+    geom_smooth(method = "lm")+
+    facet_wrap(~EXPDEPT)
+```
+
+```{r, message = FALSE}
+hiring_new <- hiring_new %>%
+    group_by(PAIR_RAND) %>%
+    mutate(percentage_URM_total_cm = mean(percentage_URM_total),   # 
+           percentage_URM_total_cmc = percentage_URM_total - percentage_URM_total_cm) %>%   # cluster-mean centered
+    ungroup()  # exit the "editing within groups" mode
+# The meanses variable already exists in the original data, but it's slightly
+# different from computing it by hand
+hiring_new %>%
+    select(PAIR_RAND, percentage_URM_total,percentage_URM_total_cm, percentage_URM_total_cmc)
+hiring_new <- hiring_new %>%
+    group_by(PAIR_RAND) %>%
+    mutate(percentage_f_total_cm = mean(percentage_f_total),   # 
+           percentage_f_total_cmc = percentage_f_total - percentage_f_total_cm) %>%   # cluster-mean centered
+    ungroup()  # exit the "editing within groups" mode
+# The meanses variable already exists in the original data, but it's slightly
+# different from computing it by hand
+hiring_new %>%
+    select(PAIR_RAND, percentage_f_total,percentage_f_total_cm, percentage_f_total_cmc)
+```
+
+```{r, message = FALSE}
+contextual <- lmer(num_hire_urm ~ percentage_URM_total_cm + percentage_URM_total + (1 | PAIR_RAND), data = hiring_new)
+m_lv2 <- lmer(num_hire_urm ~ percentage_URM_total + EXPDEPT*percentage_URM_total + (1 | PAIR_RAND), data = hiring_new)
+summary(m_lv2)
+```
+
+
+```{r, ICC, message = FALSE}
+msummary(list(
+    "Model 1" = m1_urm,
+    "Model 2" = m1_urm_condition,
+    "Model 3" = m_lv2
+))
+m1_urm
+m1_urm_condition
+m_lv2
+anova(m_lv2)
+modelsummary(m_lv2)
+confint(m_lv2)
+confint(m1_urm)
+
+# Model 1 discussion:
+## We believe this model suggests that for every one unit increase in percentage of URM faculty at a department, we should expect a .01 increase in new URM hire 
+## In other words, for every 100 White faculty working within a department, we can expect 1 URM to be hired
+
+# Model 2:
+## Adding the condition variable to the model shows that that being in the intervention condition leads to an estimate of hiring .05 URM faculty, i.e., 5 in 100 
+
+
+```
+
+## A short paragraph summarizing the findings from your model addressing your research questions.
+
+### GENERAL RESULTS
+Hiring of White faculty generally remains unchanged even following a bias reduction intervention
+
+The existing number of URM faculty in a department had a positive effect on additional URM hires but only in departments that received the bias reduction intervention
